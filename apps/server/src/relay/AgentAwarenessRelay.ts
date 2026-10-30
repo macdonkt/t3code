@@ -50,6 +50,7 @@ import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import { forkParked } from "../serverActivation.ts";
+import { runNtfyNotifier } from "./NtfyNotifier.ts";
 
 export class AgentAwarenessRelay extends Context.Service<
   AgentAwarenessRelay,
@@ -820,6 +821,19 @@ export const make = Effect.gen(function* () {
       yield* forkParked(
         Effect.sleep("1 second").pipe(
           Effect.andThen(publishActiveThreadsOnceWhenConfigured(startupState !== "enabled")),
+        ),
+      );
+      // Fork customization (CUSTOMIZATIONS.md): ntfy alerts, independent of T3 Connect.
+      yield* forkParked(
+        runNtfyNotifier({
+          threads,
+          projects,
+          getEnvironmentId: serverEnvironment.getEnvironmentId,
+          shouldHandleEvent: shouldPublishAgentAwarenessEvent,
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("ntfy notifier stopped", { cause: Cause.pretty(cause) }),
+          ),
         ),
       );
       yield* forkParked(
